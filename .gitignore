@@ -1,0 +1,6 @@
+outputs/
+*.ckpt
+*.tsv
+*/__pycache__/
+__pycache__/
+*.7z
