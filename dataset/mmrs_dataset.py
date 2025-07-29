@@ -17,6 +17,8 @@ from pandas import Series, DataFrame
 from slider import Beatmap, Circle
 from torch.utils.data import IterableDataset
 
+from event import deserialize_events
+
 from .data_utils import load_audio_file, remove_events_of_type, get_hold_note_ratio, get_scroll_speed_ratio, \
     get_hitsounded_status, get_song_length
 from .osu_parser import OsuParser
@@ -87,8 +89,6 @@ class MmrsDataset(IterableDataset):
         self.sample_weights = None
         self.mask = mask
         self.contiguous = contiguous
-        self.amalgamation_info = json.load(open(self.path / "amalgamation.json", "r"))
-        self.amalgamation = None
 
         if shuffle:
             random.seed(72727)
@@ -139,32 +139,8 @@ class MmrsDataset(IterableDataset):
 
         return sample_weights
 
-    def _init_amalgamation(self, subset_ids: list[int]):
-        self.amalgamation = {}
-        with open(self.path / "amalgamation.bin", "rb") as amalgamation_bin:
-            for beatmapset_id in subset_ids:
-                metadata = self.metadata.loc[beatmapset_id]
-
-                if self.args.min_year > 0 and metadata.iloc[0]["RankedDate"].year < self.args.min_year:
-                    continue
-
-                if self.args.min_difficulty > 0 and all(beatmap_metadata["DifficultyRating"]
-                                                        < self.args.min_difficulty for _, beatmap_metadata in
-                                                        metadata.iterrows()):
-                    continue
-
-                for i, beatmap_metadata in metadata.iterrows():
-                    if self.args.min_difficulty > 0 and beatmap_metadata["DifficultyRating"] < self.args.min_difficulty:
-                        continue
-
-                    [offset, size] = self.amalgamation_info[beatmap_metadata["BeatmapFile"]]
-                    amalgamation_bin.seek(offset)
-                    self.amalgamation[beatmap_metadata["BeatmapFile"]] = amalgamation_bin.read(size)
-
     def __iter__(self):
         subset_ids = self.subset_ids[self.start:self.end].copy()
-        if self.amalgamation is None:
-            self._init_amalgamation(subset_ids)
 
         #if not self.test:
         #    random.shuffle(subset_ids)
@@ -188,7 +164,6 @@ class MmrsDataset(IterableDataset):
             self.tokenizer,
             self.test,
             self.shared,
-            self.amalgamation,
             self.sample_weights,
             self.mask,
             self.contiguous,
@@ -251,6 +226,7 @@ class BeatmapDatasetIterable:
         "gen_start_frame",
         "mask",
         "contiguous",
+        "amalgamation_info",
         "amalgamation",
     )
 
@@ -264,7 +240,6 @@ class BeatmapDatasetIterable:
             tokenizer: Tokenizer,
             test: bool,
             shared: Namespace,
-            amalgamation: dict[str, bytes],
             sample_weights: dict[int, float] = None,
             mask: bool = True,
             contiguous: bool = False,
@@ -285,7 +260,34 @@ class BeatmapDatasetIterable:
         self.add_empty_sequences = args.add_empty_sequences
         self.mask = mask
         self.contiguous = contiguous
-        self.amalgamation = amalgamation
+
+        self.amalgamation_info = json.load(open(self.path / "amalgamation.json", "r"))
+        self.amalgamation = {}
+        with open(self.path / "amalgamation.bin", "rb") as amalgamation_bin:
+            for beatmapset_id in subset_ids:
+                metadata = self.metadata.loc[beatmapset_id]
+
+                if self.args.min_year > 0 and metadata.iloc[0]["BeatmapFile"].year < self.args.min_year:
+                    print(f"Skipping {metadata.iloc[0]["BeatmapFile"]} due to low year")
+                    continue
+
+                if self.args.min_difficulty > 0 and all(beatmap_metadata["DifficultyRating"]
+                                                        < self.args.min_difficulty for _, beatmap_metadata in
+                                                        metadata.iterrows()):
+                    print(f"Skipping {metadata.iloc[0]["BeatmapFile"]} due to low difficulty")
+                    continue
+
+                for i, beatmap_metadata in metadata.iterrows():
+                    if self.args.min_difficulty > 0 and beatmap_metadata["DifficultyRating"] < self.args.min_difficulty:
+                        print(f"Skipping {beatmap_metadata["BeatmapFile"]} due to low difficulty")
+                        continue
+                    if not beatmap_metadata["BeatmapFile"] in self.amalgamation_info:
+                        print(f"{beatmap_metadata["BeatmapFile"]} not in amalgamation info, skipping")
+                        return
+
+                    [offset, size, start, end, sv_mul, cs] = self.amalgamation_info[beatmap_metadata["BeatmapFile"]]
+                    amalgamation_bin.seek(offset)
+                    self.amalgamation[beatmap_metadata["BeatmapFile"]] = (amalgamation_bin.read(size), start, end, sv_mul, cs)
 
     def _get_frames(self, samples: npt.NDArray) -> tuple[npt.NDArray, npt.NDArray]:
         """Segment audio samples into frames.
@@ -749,12 +751,22 @@ class BeatmapDatasetIterable:
                           speed: float) -> dict:
         beatmap_path = self.path / "data" / beatmap_metadata["BeatmapSetFolder"] / beatmap_metadata["BeatmapFile"]
         #osu_beatmap = Beatmap.from_path(beatmap_path)
+        '''
         osu_beatmap = Beatmap.parse(pyzstd.decompress(self.amalgamation[beatmap_metadata["BeatmapFile"]]).decode())
         if len(osu_beatmap._hit_objects) <= 1:
             return
 
         map_start = osu_beatmap._hit_objects[0].time.total_seconds() * 1000
         map_end = (osu_beatmap._hit_objects[-1].time if isinstance(osu_beatmap._hit_objects[-1], Circle) else osu_beatmap._hit_objects[-1].end_time).total_seconds() * 1000
+        '''
+
+        if not beatmap_metadata["BeatmapFile"] in self.amalgamation:
+            print(f"{beatmap_metadata["BeatmapFile"]} not in amalgamation, skipping")
+            return
+
+        compressed, map_start, map_end, sv_mul, cs = self.amalgamation[beatmap_metadata["BeatmapFile"]]
+        map_events, map_event_times = deserialize_events(pyzstd.decompress(compressed))
+
         frame_times = np.arange(map_start, map_end, self.args.ms_per_seq // self.args.overlap_divisor)
 
         if not self.contiguous:
@@ -769,10 +781,10 @@ class BeatmapDatasetIterable:
                     frame_times.append(new_time)
             frame_times = np.array(frame_times)
 
-        def add_special_data(data, beatmap_metadata, beatmap: Beatmap):
+        def add_special_data(data, beatmap_metadata):
             gamemode = beatmap_metadata["ModeInt"]
             data["gamemode"] = gamemode
-            data["beatmap_id"] = beatmap.beatmap_id
+            #data["beatmap_id"] = beatmap_metadata["Id"]
             data["ai"] = beatmap_metadata["AI"]
             data["beatmap_idx"] = beatmap_metadata["BeatmapIdx"]
             #data["difficulty"] = self._get_difficulty(beatmap_metadata, speed)
@@ -780,40 +792,28 @@ class BeatmapDatasetIterable:
             #data["hitsounded"] = get_hitsounded_status(beatmap)
             data["song_length"] = map_end - map_start
             if gamemode in [0, 2]:
-                data["global_sv"] = beatmap.slider_multiplier
-                data["circle_size"] = beatmap.circle_size
+                data["global_sv"] = sv_mul
+                data["circle_size"] = cs
+            '''
             if gamemode == 3:
                 data["keycount"] = int(beatmap.circle_size)
                 data["hold_note_ratio"] = get_hold_note_ratio(beatmap)
             if gamemode in [1, 3]:
                 data["scroll_speed_ratio"] = get_scroll_speed_ratio(beatmap)
+            '''
 
         def get_context(context: ContextType, identifier, add_type=True):
-            data = {"extra": {"context_type": context, "add_type": add_type, "id": identifier + '_' + context.value}}
+            data: dict = {"extra": {"context_type": context, "add_type": add_type, "id": identifier + '_' + context.value}}
             if context == ContextType.NONE:
                 data["events"], data["event_times"] = [], []
-            elif context == ContextType.TIMING:
-                data["events"], data["event_times"] = self.parser.parse_timing(osu_beatmap, speed)
             elif context == ContextType.NO_HS:
-                hs_events, hs_event_times = self.parser.parse(osu_beatmap, speed)
-                data["events"], data["event_times"] = remove_events_of_type(hs_events, hs_event_times,
+                data["events"], data["event_times"] = remove_events_of_type(map_events, map_event_times,
                                                                             [EventType.HITSOUND, EventType.VOLUME])
-            elif context == ContextType.GD:
-                other_metadata = set_metadata.drop(i).sample().iloc[0]
-                other_beatmap_path = self.path / "data" / other_metadata["BeatmapSetFolder"] / other_metadata[
-                    "BeatmapFile"]
-                other_beatmap = Beatmap.from_path(other_beatmap_path)
-                data["events"], data["event_times"] = self.parser.parse(other_beatmap, speed)
-                add_special_data(data["extra"], other_metadata, other_beatmap)
             elif context == ContextType.MAP:
-                data["events"], data["event_times"] = self.parser.parse(osu_beatmap, speed)
+                data["events"], data["event_times"] = map_events, map_event_times
                 if random.random() < self.args.hitsound_dropout_prob:
                     data["events"], data["event_times"] = remove_events_of_type(data["events"], data["event_times"],
                                                                                 [EventType.HITSOUND, EventType.VOLUME])
-            elif context == ContextType.KIAI:
-                data["events"], data["event_times"] = self.parser.parse_kiai(osu_beatmap, speed)
-            elif context == ContextType.SV:
-                data["events"], data["event_times"] = self.parser.parse_scroll_speeds(osu_beatmap, speed)
             return data
 
         extra_data = {
@@ -821,10 +821,7 @@ class BeatmapDatasetIterable:
             "special": {},
         }
 
-        add_special_data(extra_data["special"], beatmap_metadata, osu_beatmap)
-
-        if self.sample_weights is not None:
-            extra_data["sample_weights"] = self.sample_weights.get(osu_beatmap.beatmap_id, 1.0)
+        add_special_data(extra_data["special"], beatmap_metadata)
 
         context = [get_context(context, "out", add_type=False) for context in [ContextType.MAP]]
         sequences = self._create_sequences(frame_times, context, extra_data)
