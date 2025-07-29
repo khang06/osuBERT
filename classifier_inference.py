@@ -8,8 +8,6 @@ from dataset.osu_parser import OsuParser
 from model import LitOsuBertClassifier, get_tokenizer
 from tokenizer import Tokenizer
 from transformers import ModernBertForSequenceClassification
-import numpy as np
-import pandas as pd
 from torch.utils.data import DataLoader
 
 torch.backends.cuda.matmul.allow_tf32 = True
@@ -42,7 +40,11 @@ def main(args: TrainConfig):
     paths = [str(p) for p in test_maps_dir.glob("*.osu")]
     if not paths:
         raise FileNotFoundError(f"No .osu files found in {test_maps_dir}.")
-    dataset = RawDataset(paths, args.data, parser, tokenizer)
+    beatmap_data = []
+    for p in paths:
+        with open(p, "r", encoding="utf-8-sig") as f:
+            beatmap_data.append(f.read())
+    dataset = RawDataset(beatmap_data, args.data, parser, tokenizer)
     loader = DataLoader(
         dataset=dataset,
         batch_size=64,
