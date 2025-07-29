@@ -5,13 +5,13 @@ precision: "bf16-mixed"
 compile: false
 
 data:
-  dataset_type: "mmrs"
-  train_dataset_path: "E:\\osudataset\\data"
-  test_dataset_path: "E:\\osudataset\\data"
+  dataset_type: "raw"
+  train_dataset_path: ""
+  test_dataset_path: ""
   train_dataset_start: 0
   train_dataset_end: 0
   test_dataset_start: 0
-  test_dataset_end: 36248
+  test_dataset_end: 0
   add_gamemode_token: false
   add_diff_token: false # Most "special" tokens are disabled
   add_style_token: false
