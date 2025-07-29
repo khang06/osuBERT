@@ -1,17 +1,6 @@
-defaults:
-  - /osubert/base_train@_here_
-
-precision: "bf16-mixed"
-compile: false
-
 data:
+  types_first: true
   dataset_type: "raw"
-  train_dataset_path: ""
-  test_dataset_path: ""
-  train_dataset_start: 0
-  train_dataset_end: 0
-  test_dataset_start: 0
-  test_dataset_end: 0
   add_gamemode_token: false
   add_diff_token: false # Most "special" tokens are disabled
   add_style_token: false
@@ -25,21 +14,37 @@ data:
   add_descriptors: false
   add_sv: false
   add_timing_points: false
+  add_empty_sequences: false
   class_dropout_prob: 0.0 # add_style_token is disabled anyway
-  hitsound_dropout_prob: 1.0
+  hitsound_dropout_prob: 0.0
   x_flip_prob: 0.0
   y_flip_prob: 0.0
-  gamemodes: [0]
-  add_empty_sequences: false
-  min_difficulty: 4.0
-  #min_year: 2020
-  add_timing: true
   dt_augment_prob: 0.0
-  timing_random_offset: 0
-  overlap_divisor: 2
-  cycle_length: 1
   position_precision: 4
   position_split_axes: true
+  position_range: [-256, 768, -256, 640]
+  gamemodes: [0]
+  ms_per_seq: 32768
+
+optim: # Optimizer settings
+  name: adamw
+  base_lr: 1e-4 # Should be scaled with the number of devices present
+  batch_size: 64 # This is the batch size per GPU
+  total_steps: 65536
+  warmup_steps: 10000
+  lr_scheduler: cosine
+  weight_decay: 0.0
+  grad_clip: 1.0
+  grad_acc: 4
+  final_cosine: 1e-5
 
 dataloader:
   num_workers: 8
+
+eval: # Evaluation settings
+  #every_steps: 2000
+  every_steps: 1000
+  steps: 250
+
+checkpoint: # Checkpoint settings
+  every_steps: 4000

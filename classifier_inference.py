@@ -1,6 +1,7 @@
 from pathlib import Path
 import hydra
 import torch
+import omegaconf
 
 from config import TrainConfig
 from dataset.raw_dataset import RawDataset
@@ -8,36 +9,43 @@ from dataset.osu_parser import OsuParser
 from model import LitOsuBertClassifier, get_tokenizer
 from tokenizer import Tokenizer
 from transformers import ModernBertForSequenceClassification
-import numpy as np
-import pandas as pd
 from torch.utils.data import DataLoader
 
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 torch.set_float32_matmul_precision("high")
 
+OSU_BERT_MODEL = "export/"
+OSU_BERT_DEFAULT_CONFIG = omegaconf.OmegaConf.structured(TrainConfig)
+OSU_BERT_CONFIG: TrainConfig = omegaconf.OmegaConf.load(
+    "configs/inference_v6.yaml"
+)
+OSU_BERT_CONFIG = omegaconf.OmegaConf.merge(OSU_BERT_DEFAULT_CONFIG, OSU_BERT_CONFIG)
 
 def format_timestamp(t: int):
     return f"{t // 60000:02}:{(t // 1000) % 60:02}:{t % 1000:03}"
 
-@hydra.main(config_path="configs", config_name="inference_v6", version_base="1.1")
 def main(args: TrainConfig):
     tokenizer: Tokenizer = get_tokenizer(args)
     print("vocab size:", tokenizer.vocab_size_in)
 
-    model = ModernBertForSequenceClassification.from_pretrained("../../../export")
+    model = ModernBertForSequenceClassification.from_pretrained(OSU_BERT_MODEL)
     #model = torch.compile(model.eval().half().to("cuda"))
     model = model.eval().to("cuda")
 
     print("model loaded")
     parser = OsuParser(args, tokenizer)
-    test_maps_dir = Path("../../../test_maps/")
+    test_maps_dir = Path("test_maps/")
     if not test_maps_dir.exists():
         raise FileNotFoundError(f"Test maps directory {test_maps_dir} does not exist.")
     paths = [str(p) for p in test_maps_dir.glob("*.osu")]
     if not paths:
         raise FileNotFoundError(f"No .osu files found in {test_maps_dir}.")
-    dataset = RawDataset(paths, args.data, parser, tokenizer)
+    beatmap_data = []
+    for p in paths:
+        with open(p, "r", encoding="utf-8-sig") as f:
+            beatmap_data.append(f.read())
+    dataset = RawDataset(beatmap_data, args.data, parser, tokenizer)
     loader = DataLoader(
         dataset=dataset,
         batch_size=64,
@@ -76,4 +84,4 @@ def main(args: TrainConfig):
 
 
 if __name__ == "__main__":
-    main()
+    main(OSU_BERT_CONFIG)
