@@ -24,8 +24,7 @@ def main(args: TrainConfig):
     tokenizer: Tokenizer = get_tokenizer(args)
     print("vocab size:", tokenizer.vocab_size_in)
 
-    # Requires TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 for now. Sorry
-    model: ModernBertForSequenceClassification = LitOsuBertClassifier.load_from_checkpoint("../../../final_v5.ckpt").model
+    model = ModernBertForSequenceClassification.from_pretrained("../../../export")
     #model = torch.compile(model.eval().half().to("cuda"))
     model = model.eval().to("cuda")
 
