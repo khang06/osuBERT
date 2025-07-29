@@ -5,3 +5,4 @@ outputs/
 __pycache__/
 *.7z
 export
+test_maps/*.osu
