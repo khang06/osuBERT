@@ -19,7 +19,7 @@ torch.set_float32_matmul_precision("high")
 def format_timestamp(t: int):
     return f"{t // 60000:02}:{(t // 1000) % 60:02}:{t % 1000:03}"
 
-@hydra.main(config_path="configs", config_name="inference_v5", version_base="1.1")
+@hydra.main(config_path="configs", config_name="inference_v6", version_base="1.1")
 def main(args: TrainConfig):
     tokenizer: Tokenizer = get_tokenizer(args)
     print("vocab size:", tokenizer.vocab_size_in)
@@ -31,6 +31,13 @@ def main(args: TrainConfig):
     print("model loaded")
     parser = OsuParser(args, tokenizer)
     paths = [
+        "D:\\osusongs\\beatmap-638209028469451839-hybris\\qfeileadh feat. Noa - Hubris no Itadaki ni Sobieru no wa (khangaroood) [Arrogance].osu",
+        "D:\\osusongs\\beatmap-638165270936457455-shippaisakushoujo\\Kairiki Bear - Failure Girl (khangaroood) [epic fail].osu",
+        "D:\\osusongs\\beatmap-637931879059786682-ether\\Feryquitous ft. Aitsuki Nakuru - Ether (khangaroood) [shart].osu",
+        "D:\\osusongs\\440068 Hana - Sakura no Uta\\Hana - Sakura no Uta (Ultimate Madoka) [VI.Artist of the Sakura].osu",
+        "D:\\osusongs\\1610294 Mysteka - Hesperos\\Mysteka - Hesperos (Acylica) [3dyoshispin].osu",
+        "E:\\osuaigendataset\\data\\Annabel - historia (Game Ver.) (chaser01) [Another].osu",
+        "D:\\osusongs\\beatmap-638135439070772556-strahv\\Feryquitous - Strahv (Mapperatorinator) [Mapperatorinator V30].osu",
         "D:\\osusongs\\beatmap-638579819698122505-ultimatedragonforestkingdom64\\KEMOMIMI EDM SQUAD - ultimate dragon forest kingdom 64 definitive edition (game of the year mix) (Mapperatorinator) [Mapperatorinator V30].osu",
         "D:\\osusongs\\beatmap-638414025520738565-lightning\\PSYQUI - Lightning (Mapperatorinator) [Mapperatorinator V30].osu",
         "D:\\osusongs\\974908 Kaytie - NOT THE YADDAS _piano version_ [no video]\\beatmap21a1e2b924404de6af593e3b25a9d00d.osu",
@@ -57,6 +64,10 @@ def main(args: TrainConfig):
         "D:\\chasermaps\\Hondo Kaede, Oonishi Saori, Waki Azumi, Kino Hina, Matsuda Risae, Suzuki Eri - Save you Save me (chaser01) [Ex].osu",
         "D:\\chasermaps\\Brookes Brothers - Tear You Down (chaser01) [Challenge].osu",
         "D:\\chasermaps\\Tamura Yukari - Beautiful Amulet (chaser01) [Ex].osu",
+        "D:\\osusongs\\2406750 Victoria Justice, Ariana Grande - LA Boyz\\Victoria Justice, Ariana Grande - L.A. Boyz (AJT) [Give It Up].osu",
+        "D:\\osusongs\\2399044 laurel - think again {blowmymind}\\laurel - think again... {blow.my.mind} (mynt) [no offense].osu",
+        "D:\\osusongs\\2397955 Umeboshi Chazuke - Galaxy in Toybox\\Umeboshi Chazuke - Galaxy in Toybox (bluirre) [Arles].osu",
+        "D:\\Andronicus - Make You Whole (freshly sqeezed mix) (aspen) [jump].osu",
     ]
     dataset = RawDataset(paths, args.data, parser, tokenizer)
     loader = DataLoader(

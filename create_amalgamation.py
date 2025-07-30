@@ -2,6 +2,7 @@ import os
 import json
 import pyzstd
 import hydra
+import concurrent.futures
 
 from config import TrainConfig
 from pathlib import Path
@@ -10,10 +11,31 @@ from tqdm import tqdm
 from dataset.osu_parser import OsuParser
 from event import serialize_events
 from tokenizer import Tokenizer
+from itertools import repeat
 
-BASE_PATH = "E:\\osudataset\\data"
+def init_process(parser: OsuParser):
+    global static_parser
+    static_parser = parser
 
-@hydra.main(config_path="configs", config_name="train_v5", version_base="1.1")
+def process_map(path: str) -> None | tuple[bytes, str, float, float, float, float]:
+    beatmap = Beatmap.from_path(path)
+    if len(beatmap._hit_objects) <= 1 or beatmap.mode != 0:
+        return None
+
+    map_start = beatmap._hit_objects[0].time.total_seconds() * 1000
+    map_end = (beatmap._hit_objects[-1].time if isinstance(beatmap._hit_objects[-1], Circle) else beatmap._hit_objects[-1].end_time).total_seconds() * 1000
+    events, event_times = static_parser.parse(beatmap)
+
+    #beatmap = pyzstd.compress(beatmap, zstd_dict=zstd_dict)
+    option = {
+        pyzstd.CParameter.nbWorkers: 1,
+        pyzstd.CParameter.compressionLevel: 5,
+    }
+    compressed = pyzstd.compress(serialize_events(events, event_times), option)
+
+    return compressed, str(os.path.basename(path)), map_start, map_end, beatmap.slider_multiplier, beatmap.circle_size
+
+@hydra.main(config_path="configs", config_name="train_v6", version_base="1.1")
 def main(args: TrainConfig):
     tokenizer = Tokenizer(args)
     parser = OsuParser(args, tokenizer)
@@ -32,19 +54,6 @@ def main(args: TrainConfig):
             if file.endswith(".osu"):
                 beatmap_files.append(os.path.join(root, file))
 
-    def maps_as_bytes():
-        for path in beatmap_files:
-            with open(path, "r", encoding="utf-8-sig") as beatmap_file:
-                beatmap = beatmap_file.read().encode()
-            yield beatmap
-
-    '''
-    print("training dict")
-    zstd_dict = pyzstd.train_dict(maps_as_bytes(), 1024 * 1024)
-    with open(f"{BASE_PATH}\\amalgamation.dict", "wb") as amalgamation_dict:
-        amalgamation_dict.write(zstd_dict.dict_content)
-    '''
-
     option = {
         pyzstd.CParameter.nbWorkers: 4,
         pyzstd.CParameter.compressionLevel: 5,
@@ -52,6 +61,7 @@ def main(args: TrainConfig):
     amalgamation_entries = {}
     cur_len = 0
     with open("E:\\osuaigendataset\\amalgamation.bin", "wb") as amalgamation_bin:
+        '''
         for path in tqdm(beatmap_files):
             try:
                 beatmap = Beatmap.from_path(path)
@@ -69,6 +79,16 @@ def main(args: TrainConfig):
                 amalgamation_bin.write(compressed)
             except Exception as e:
                 print(f"Failed to parse {path}: {e}")
+        '''
+        with concurrent.futures.ProcessPoolExecutor(max_workers=8, initializer=init_process, initargs=(parser,)) as executor:
+            done = list(tqdm(executor.map(process_map, beatmap_files), total=len(beatmap_files)))
+        for x in done:
+            if x is None:
+                continue
+            compressed, filename, map_start, map_end, global_sv, cs = x
+            amalgamation_entries[filename] = (cur_len, len(compressed), map_start, map_end, global_sv, cs)
+            cur_len += len(compressed)
+            amalgamation_bin.write(compressed)
 
     with open("E:\\osuaigendataset\\amalgamation.json", "w") as amalgamation_json:
         json.dump(amalgamation_entries, amalgamation_json)

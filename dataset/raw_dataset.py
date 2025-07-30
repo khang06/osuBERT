@@ -45,27 +45,6 @@ class RawDataset(IterableDataset):
         self.add_pre_tokens = args.add_pre_tokens
         self.add_empty_sequences = args.add_empty_sequences
 
-    def _get_frames(self, samples: npt.NDArray) -> tuple[npt.NDArray, npt.NDArray]:
-        """Segment audio samples into frames.
-
-        Each frame has `frame_size` audio samples.
-        It will also calculate and return the time of each audio frame, in miliseconds.
-
-        Args:
-            samples: Audio time-series.
-
-        Returns:
-            frames: Audio frames.
-            frame_times: Audio frame times.
-        """
-        samples = np.pad(samples, [0, self.args.hop_length - len(samples) % self.args.hop_length])
-        frames = np.reshape(samples, (-1, self.args.hop_length))
-        frames_per_milisecond = (
-                self.args.sample_rate / self.args.hop_length / MILISECONDS_PER_SECOND
-        )
-        frame_times = np.arange(len(frames)) / frames_per_milisecond
-        return frames, frame_times
-
     def _create_sequences(
             self,
             frame_times: npt.NDArray,

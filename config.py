@@ -36,6 +36,8 @@ class DataConfig:
     scroll_speed_ratio_dropout_prob: float = 0.2
     descriptor_dropout_prob: float = 0.2
     hitsound_dropout_prob: float = 0.2
+    x_flip_prob: float = 0.2
+    y_flip_prob: float = 0.2
     add_gamemode_token: bool = True
     add_diff_token: bool = True
     add_style_token: bool = False

@@ -2,7 +2,7 @@ import torch
 from model import LitOsuBertClassifier
 def main():
     # Requires TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
-    model = LitOsuBertClassifier.load_from_checkpoint("final_v5.ckpt").model
+    model = LitOsuBertClassifier.load_from_checkpoint("final_v6.ckpt").model
     model.save_pretrained("export")
 
 if __name__ == "__main__":

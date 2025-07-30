@@ -282,33 +282,12 @@ class BeatmapDatasetIterable:
                         print(f"Skipping {beatmap_metadata["BeatmapFile"]} due to low difficulty")
                         continue
                     if not beatmap_metadata["BeatmapFile"] in self.amalgamation_info:
-                        print(f"{beatmap_metadata["BeatmapFile"]} not in amalgamation info, skipping")
-                        return
+                        print(f"{beatmap_metadata["BeatmapFile"]} not in amalgamation info)")
+                        raise Exception("WTF")
 
                     [offset, size, start, end, sv_mul, cs] = self.amalgamation_info[beatmap_metadata["BeatmapFile"]]
                     amalgamation_bin.seek(offset)
                     self.amalgamation[beatmap_metadata["BeatmapFile"]] = (amalgamation_bin.read(size), start, end, sv_mul, cs)
-
-    def _get_frames(self, samples: npt.NDArray) -> tuple[npt.NDArray, npt.NDArray]:
-        """Segment audio samples into frames.
-
-        Each frame has `frame_size` audio samples.
-        It will also calculate and return the time of each audio frame, in miliseconds.
-
-        Args:
-            samples: Audio time-series.
-
-        Returns:
-            frames: Audio frames.
-            frame_times: Audio frame times.
-        """
-        samples = np.pad(samples, [0, self.args.hop_length - len(samples) % self.args.hop_length])
-        frames = np.reshape(samples, (-1, self.args.hop_length))
-        frames_per_milisecond = (
-                self.args.sample_rate / self.args.hop_length / MILISECONDS_PER_SECOND
-        )
-        frame_times = np.arange(len(frames)) / frames_per_milisecond
-        return frames, frame_times
 
     def _create_sequences(
             self,
@@ -761,8 +740,8 @@ class BeatmapDatasetIterable:
         '''
 
         if not beatmap_metadata["BeatmapFile"] in self.amalgamation:
-            print(f"{beatmap_metadata["BeatmapFile"]} not in amalgamation, skipping")
-            return
+            print(f"{beatmap_metadata["BeatmapFile"]} not in amalgamation!!!! (amal {len(self.amalgamation)}, subsets {len(self.subset_ids)})")
+            raise Exception("WTF")
 
         compressed, map_start, map_end, sv_mul, cs = self.amalgamation[beatmap_metadata["BeatmapFile"]]
         map_events, map_event_times = deserialize_events(pyzstd.decompress(compressed))
@@ -811,9 +790,6 @@ class BeatmapDatasetIterable:
                                                                             [EventType.HITSOUND, EventType.VOLUME])
             elif context == ContextType.MAP:
                 data["events"], data["event_times"] = map_events, map_event_times
-                if random.random() < self.args.hitsound_dropout_prob:
-                    data["events"], data["event_times"] = remove_events_of_type(data["events"], data["event_times"],
-                                                                                [EventType.HITSOUND, EventType.VOLUME])
             return data
 
         extra_data = {
@@ -823,10 +799,23 @@ class BeatmapDatasetIterable:
 
         add_special_data(extra_data["special"], beatmap_metadata)
 
-        context = [get_context(context, "out", add_type=False) for context in [ContextType.MAP]]
+        context = [get_context(context, "out", add_type=False) for context in [ContextType.NO_HS if random.random() < self.args.hitsound_dropout_prob else ContextType.MAP]]
         sequences = self._create_sequences(frame_times, context, extra_data)
 
+        x_flip = random.random() < self.args.x_flip_prob
+        y_flip = random.random() < self.args.y_flip_prob
+        x_pivot = 512 // self.parser.position_precision
+        y_pivot = 384 // self.parser.position_precision
+
         for sequence in sequences:
+            if x_flip or y_flip:
+                for context in sequence["context"]:
+                    for ev in context["events"]:
+                        if x_flip and ev.type == EventType.POS_X:
+                            ev.value = x_pivot - ev.value
+                        if y_flip and ev.type == EventType.POS_Y:
+                            ev.value = y_pivot - ev.value
+
             self.maybe_change_dataset()
             sequence = self._normalize_time_shifts(sequence, beatmap_path)
             sequence = self._tokenize_sequence(sequence)

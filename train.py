@@ -76,7 +76,7 @@ def worker_init_fn(worker_id: int) -> None:
     dataset.start = overall_start + worker_id * per_worker
     dataset.end = min(dataset.start + per_worker, overall_end)
 
-@hydra.main(config_path="configs", config_name="train_v5", version_base="1.1")
+@hydra.main(config_path="configs", config_name="train_v6", version_base="1.1")
 def main(args: TrainConfig):
     wandb_logger = WandbLogger(
         project="detectoratorinator",

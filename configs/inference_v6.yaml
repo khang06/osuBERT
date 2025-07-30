@@ -20,12 +20,13 @@ data:
   add_sv_special_token: false
   add_cs_token: true
   add_hitsounded_token: false
-  add_song_length_token: true
-  add_song_position_token: true
+  add_song_length_token: false
+  add_song_position_token: false
   add_descriptors: false
-  add_sv: true
+  add_sv: false
+  add_timing_points: false
   class_dropout_prob: 0.0 # add_style_token is disabled anyway
-  hitsound_dropout_prob: 0.0
+  hitsound_dropout_prob: 1.0
   x_flip_prob: 0.0
   y_flip_prob: 0.0
   gamemodes: [0]
@@ -36,26 +37,9 @@ data:
   dt_augment_prob: 0.0
   timing_random_offset: 0
   overlap_divisor: 2
-
-optim: # Optimizer settings
-  name: adamw
-  base_lr: 1e-4 # Should be scaled with the number of devices present
-  batch_size: 8 # This is the batch size per GPU
-  total_steps: 65536
-  warmup_steps: 10000
-  lr_scheduler: cosine
-  weight_decay: 0.0
-  grad_clip: 1.0
-  grad_acc: 4
-  final_cosine: 1e-5
+  cycle_length: 1
+  position_precision: 4
+  position_split_axes: true
 
 dataloader:
   num_workers: 8
-
-eval: # Evaluation settings
-  #every_steps: 2000
-  every_steps: 1000
-  steps: 250
-
-checkpoint: # Checkpoint settings
-  every_steps: 4000
