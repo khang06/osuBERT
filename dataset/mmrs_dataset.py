@@ -30,6 +30,7 @@ AUDIO_FILE_NAME = "audio.mp3"
 MILISECONDS_PER_SECOND = 1000
 STEPS_PER_MILLISECOND = 0.1
 LABEL_IGNORE_ID = -100
+AI_MIN_SET_ID = 7270000
 context_types_with_kiai = [ContextType.NO_HS, ContextType.GD, ContextType.MAP]
 
 
@@ -122,7 +123,10 @@ class MmrsDataset(IterableDataset):
         return df
 
     def _beatmap_set_ids_from_metadata(self):
-        return self.metadata.index.to_frame()["BeatmapSetId"].unique().tolist()
+        ret = self.metadata.index.to_frame()["BeatmapSetId"].unique().tolist()
+        if self.args.ignore_ai:
+            ret = [x for x in ret if x < AI_MIN_SET_ID]
+        return ret
 
     @staticmethod
     def _get_sample_weights(sample_weights_path):

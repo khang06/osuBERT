@@ -11,6 +11,7 @@ from event import ContextType
 @dataclass
 class DataConfig:
     dataset_type: str = "mmrs"   # Dataset type (ors/mmrs)
+    ignore_ai: bool = False
     train_dataset_path: str = "/workspace/datasets/MMRS39389"  # Training dataset directory
     train_dataset_start: int = 0  # Training dataset start index
     train_dataset_end: int = 38689  # Training dataset end index
@@ -143,6 +144,7 @@ class TrainConfig:
     profile: ProfileConfig = field(default_factory=ProfileConfig)
     hydra: Any = MISSING
     mode: str = "train"
+    task: str = "mask"
 
 OmegaConf.register_new_resolver("context_type", lambda x: ContextType(x.lower()))
 cs = ConfigStore.instance()

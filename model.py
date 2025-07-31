@@ -185,15 +185,11 @@ def get_scheduler(optimizer: Optimizer, args: TrainConfig) -> LRScheduler:
         last_epoch=-1,
     )
 
-    '''
     scheduler_p2 = CosineAnnealingLR(
         optimizer,
         T_max=args.optim.total_steps - args.optim.warmup_steps,
         eta_min=args.optim.final_cosine,
     )
-    '''
-
-    scheduler_p2 = ConstantLR(optimizer, factor=1, last_epoch=-1)
 
     scheduler = SequentialLR(
         optimizer,

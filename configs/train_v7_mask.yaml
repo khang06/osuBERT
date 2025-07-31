@@ -1,0 +1,62 @@
+defaults:
+  - /osubert/base_train@_here_
+
+precision: "bf16-mixed"
+compile: false
+task: "mask"
+
+data:
+  dataset_type: "mmrs"
+  ignore_ai: true
+  train_dataset_path: "C:\\osuaigendataset"
+  test_dataset_path: "C:\\osuaigendataset"
+  train_dataset_start: 0
+  train_dataset_end: 31604
+  test_dataset_start: 31604
+  test_dataset_end: 31704
+  add_gamemode_token: false
+  add_diff_token: false # Most "special" tokens are disabled
+  add_style_token: false
+  add_mapper_token: false
+  add_year_token: false
+  add_sv_special_token: false
+  add_cs_token: true
+  add_hitsounded_token: false
+  add_song_length_token: false
+  add_song_position_token: false
+  add_descriptors: false
+  add_sv: false
+  add_timing_points: false
+  class_dropout_prob: 0.0 # add_style_token is disabled anyway
+  gamemodes: [0]
+  add_empty_sequences: false
+  add_timing: true
+  dt_augment_prob: 0.0
+  x_flip_prob: 0.0
+  y_flip_prob: 0.0
+  cycle_length: 1
+  position_precision: 4
+  position_split_axes: true
+
+optim: # Optimizer settings
+  name: muon
+  base_lr: 4e-3 # Should not be scaled with the number of devices present
+  batch_size: 16 # This is the batch size per GPU
+  total_steps: 65536
+  warmup_steps: 0
+  lr_scheduler: cosine
+  weight_decay: 0.0
+  grad_clip: 1.0
+  grad_acc: 4
+  final_cosine: 1e-5
+
+dataloader:
+  num_workers: 8
+
+eval: # Evaluation settings
+  #every_steps: 2000
+  every_steps: 1000
+  steps: 250
+
+checkpoint: # Checkpoint settings
+  every_steps: 4000

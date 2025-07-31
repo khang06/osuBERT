@@ -30,9 +30,7 @@ def get_dataloaders(tokenizer: Tokenizer, args: TrainConfig) -> tuple[DataLoader
             parser=parser,
             tokenizer=tokenizer,
             shared=None,
-
-            # Remember to comment these out when training masked BERT
-            mask=False,
+            mask=args.task == "mask",
         ),
         "test": get_dataset(
             args=args,
@@ -40,8 +38,7 @@ def get_dataloaders(tokenizer: Tokenizer, args: TrainConfig) -> tuple[DataLoader
             parser=parser,
             tokenizer=tokenizer,
             shared=None,
-
-            mask=False,
+            mask=args.task == "mask",
         ),
     }
 
@@ -76,10 +73,18 @@ def worker_init_fn(worker_id: int) -> None:
     dataset.start = overall_start + worker_id * per_worker
     dataset.end = min(dataset.start + per_worker, overall_end)
 
-@hydra.main(config_path="configs", config_name="train_v6", version_base="1.1")
+@hydra.main(config_path="configs", config_name="train_v7_mask", version_base="1.1")
 def main(args: TrainConfig):
+    match args.task:
+        case "mask":
+            task_project = "osuBERT"
+        case "ai":
+            task_project = "detectoratorinator"
+        case x:
+            raise Exception(f"Unhandled task {x}")
+
     wandb_logger = WandbLogger(
-        project="detectoratorinator",
+        project=task_project,
         entity="khangarood",
         job_type="training",
         offline=args.logging.mode == "offline",
@@ -91,8 +96,13 @@ def main(args: TrainConfig):
 
     train_dataloader, val_dataloader = get_dataloaders(tokenizer, args)
 
-    #model = LitOsuBert(args, tokenizer)
-    model = LitOsuBertClassifier(args, tokenizer)
+    match args.task:
+        case "mask":
+            model = LitOsuBert(args, tokenizer)
+        case "ai":
+            model = LitOsuBertClassifier(args, tokenizer)
+        case x:
+            raise Exception(f"Unhandled task {x}")
     #model.model.gradient_checkpointing_enable()
 
     if args.compile:
