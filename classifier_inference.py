@@ -18,7 +18,7 @@ torch.set_float32_matmul_precision("high")
 OSU_BERT_MODEL = "export/"
 OSU_BERT_DEFAULT_CONFIG = omegaconf.OmegaConf.structured(TrainConfig)
 OSU_BERT_CONFIG: TrainConfig = omegaconf.OmegaConf.load(
-    "configs/inference_v6.yaml"
+    "configs/inference_v7.yaml"
 )
 OSU_BERT_CONFIG = omegaconf.OmegaConf.merge(OSU_BERT_DEFAULT_CONFIG, OSU_BERT_CONFIG)
 

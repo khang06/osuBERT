@@ -5,6 +5,7 @@ import numpy as np
 from config import TrainConfig
 from dataset.mmrs_dataset import MmrsDataset
 from torch.utils.data import DataLoader, Dataset
+from transformers import ModernBertConfig, ModernBertForMaskedLM, ModernBertForSequenceClassification
 from lightning.pytorch.callbacks import ModelCheckpoint, LearningRateMonitor, OnExceptionCheckpoint
 from lightning.pytorch.loggers import WandbLogger
 from dataset.osu_parser import OsuParser
@@ -73,7 +74,7 @@ def worker_init_fn(worker_id: int) -> None:
     dataset.start = overall_start + worker_id * per_worker
     dataset.end = min(dataset.start + per_worker, overall_end)
 
-@hydra.main(config_path="configs", config_name="train_v7_mask", version_base="1.1")
+@hydra.main(config_path="configs", config_name="train_v7_ai", version_base="1.1")
 def main(args: TrainConfig):
     match args.task:
         case "mask":
@@ -101,6 +102,9 @@ def main(args: TrainConfig):
             model = LitOsuBert(args, tokenizer)
         case "ai":
             model = LitOsuBertClassifier(args, tokenizer)
+            if args.pretrained_path != "":
+                print(f"loading pretrained model {args.pretrained_path}")
+                model.model.model = ModernBertForMaskedLM.from_pretrained(args.pretrained_path).model
         case x:
             raise Exception(f"Unhandled task {x}")
     #model.model.gradient_checkpointing_enable()
