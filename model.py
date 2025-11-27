@@ -2,7 +2,11 @@ import lightning
 from omegaconf import DictConfig
 
 from config import TrainConfig
-from transformers import ModernBertConfig, ModernBertForMaskedLM, ModernBertForSequenceClassification
+from transformers import (
+    ModernBertConfig,
+    ModernBertForMaskedLM,
+    ModernBertForSequenceClassification,
+)
 from transformers.modeling_outputs import MaskedLMOutput, SequenceClassifierOutput
 from torch.optim import Optimizer, AdamW
 from torch.optim.lr_scheduler import (
@@ -12,9 +16,9 @@ from torch.optim.lr_scheduler import (
     CosineAnnealingLR,
     ConstantLR,
 )
-import bitsandbytes as bnb
 
 from tokenizer import Tokenizer
+
 
 class LitOsuBert(lightning.LightningModule):
     def __init__(self, args: TrainConfig, tokenizer):
@@ -55,11 +59,15 @@ class LitOsuBert(lightning.LightningModule):
     def configure_optimizers(self):
         optimizer = get_optimizer(self, self.args)
         scheduler = get_scheduler(optimizer, self.args)
-        return {"optimizer": optimizer, "lr_scheduler": {
-            "scheduler": scheduler,
-            "interval": "step",
-            "frequency": 1,
-        }}
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step",
+                "frequency": 1,
+            },
+        }
+
 
 class LitOsuBertClassifier(lightning.LightningModule):
     def __init__(self, args: TrainConfig, tokenizer):
@@ -103,11 +111,15 @@ class LitOsuBertClassifier(lightning.LightningModule):
     def configure_optimizers(self):
         optimizer = get_optimizer(self, self.args)
         scheduler = get_scheduler(optimizer, self.args)
-        return {"optimizer": optimizer, "lr_scheduler": {
-            "scheduler": scheduler,
-            "interval": "step",
-            "frequency": 1,
-        }}
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": {
+                "scheduler": scheduler,
+                "interval": "step",
+                "frequency": 1,
+            },
+        }
+
 
 # TODO: These are definitely not the right parameters to use
 def get_optimizer(model: lightning.LightningModule, args: DictConfig) -> Optimizer:
@@ -132,31 +144,39 @@ def get_optimizer(model: lightning.LightningModule, args: DictConfig) -> Optimiz
         },
     ]
 
-    if args.optim.name == 'adamw':
-        '''
-        optimizer = AdamW(
-            optimizer_grouped_parameters,
-            lr=args.optim.base_lr,
-        )
-        '''
-        optimizer = bnb.optim.Adam8bit(
-            optimizer_grouped_parameters,
-            lr=args.optim.base_lr,
-        )
-    elif args.optim.name == 'muon':
+    if args.optim.name == "adamw":
+        try:
+            import bitsandbytes as bnb
+
+            optimizer = bnb.optim.Adam8bit(
+                optimizer_grouped_parameters,
+                lr=args.optim.base_lr,
+            )
+        except ImportError:
+            optimizer = AdamW(
+                optimizer_grouped_parameters,
+                lr=args.optim.base_lr,
+            )
+    elif args.optim.name == "muon":
         from muon_utils import Muon
+
         """
         Muon is intended to optimize only the internal ≥2D parameters of a network.
         Embeddings, classifier heads, and scalar or vector parameters should be optimized using AdamW.
         """
         adamw_params = [
-            param for name, param in model.named_parameters()
-            if (any(kw in name.lower() for kw in {'embed', 'proj_out'}) or param.ndim <= 1)
+            param
+            for name, param in model.named_parameters()
+            if (
+                any(kw in name.lower() for kw in {"embed", "proj_out"})
+                or param.ndim <= 1
+            )
         ]
 
         adamw_param_set = set(adamw_params)
         muon_params = [
-            param for _, param in model.named_parameters()
+            param
+            for _, param in model.named_parameters()
             if param not in adamw_param_set
         ]
         print(f"Number of parameters for Muon: {len(muon_params)}")
@@ -175,6 +195,7 @@ def get_optimizer(model: lightning.LightningModule, args: DictConfig) -> Optimiz
         raise NotImplementedError
 
     return optimizer
+
 
 def get_scheduler(optimizer: Optimizer, args: TrainConfig) -> LRScheduler:
     scheduler_p1 = LinearLR(
@@ -198,6 +219,7 @@ def get_scheduler(optimizer: Optimizer, args: TrainConfig) -> LRScheduler:
     )
 
     return scheduler
+
 
 def get_tokenizer(args: TrainConfig) -> Tokenizer:
     return Tokenizer(args)
